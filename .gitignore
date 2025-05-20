@@ -1,174 +1,120 @@
-# Byte-compiled / optimized / DLL files
-__pycache__/
-*.py[cod]
-*$py.class
+import cv2
+import winsound
+import time
+import tkinter as tk
+from tkinter import Label, Frame, font
+from PIL import Image, ImageTk
 
-# C extensions
-*.so
+class DrowsinessDetectorGUI:
+    def __init__(self, master):
+        self.master = master
+        master.title("Driver Drowsiness Detection - Engineer Muslim")  
 
-# Distribution / packaging
-.Python
-build/
-develop-eggs/
-dist/
-downloads/
-eggs/
-.eggs/
-lib/
-lib64/
-parts/
-sdist/
-var/
-wheels/
-share/python-wheels/
-*.egg-info/
-.installed.cfg
-*.egg
-MANIFEST
+        
+        self.title_font = font.Font(family="Arial", size=18, weight="bold")
+        self.status_font = font.Font(family="Segoe UI", size=12)
+        self.alert_font = font.Font(family="Segoe UI", size=14, weight="bold")
+        self.primary_color = "#e0f7fa"  
+        self.secondary_color = "#ffffff" 
+        self.alert_color = "#f44336"    
+        self.warning_color = "#ff9800"  
+        self.ok_color = "#4caf50"       
+        self.closed_eyes_color = "#ffeb3b" 
 
-# PyInstaller
-#  Usually these files are written by a python script from a template
-#  before PyInstaller builds the exe, so as to inject date/other infos into it.
-*.manifest
-*.spec
+        master.config(bg=self.primary_color)
 
-# Installer logs
-pip-log.txt
-pip-delete-this-directory.txt
+        main_frame = Frame(master, bg=self.primary_color, padx=20, pady=20)
+        main_frame.pack(expand=True, fill="both")
 
-# Unit test / coverage reports
-htmlcov/
-.tox/
-.nox/
-.coverage
-.coverage.*
-.cache
-nosetests.xml
-coverage.xml
-*.cover
-*.py,cover
-.hypothesis/
-.pytest_cache/
-cover/
+        title_label = Label(main_frame, text="Driver Drowsiness Detection", font=self.title_font, bg=self.primary_color, fg="#1976d2") 
+        title_label.pack(pady=(0, 10))
+        name_label = Label(main_frame, text="- Engineer Muslim -", font=self.status_font, bg=self.primary_color, fg="#757575") 
+        name_label.pack(pady=(0, 15))
 
-# Translations
-*.mo
-*.pot
+        self.video_frame = Frame(main_frame, bg=self.secondary_color, bd=2, relief="groove")
+        self.video_frame.pack(pady=(0, 15), fill="x", expand=True)
+        self.video_label = Label(self.video_frame)
+        self.video_label.pack(padx=10, pady=10)
 
-# Django stuff:
-*.log
-local_settings.py
-db.sqlite3
-db.sqlite3-journal
+        status_frame = Frame(main_frame, bg=self.secondary_color, bd=2, relief="groove")
+        status_frame.pack(pady=(0, 15), fill="x")
+        self.status_label = Label(status_frame, text="Camera is running...", font=self.status_font, bg=self.secondary_color, padx=15, pady=15, anchor="w") 
+        self.status_label.pack(fill="x")
 
-# Flask stuff:
-instance/
-.webassets-cache
+        self.face_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_frontalface_default.xml')
+        self.eye_cascade = cv2.CascadeClassifier(cv2.data.haarcascades + 'haarcascade_eye.xml')
+        self.cap = cv2.VideoCapture(0)
+        self.sleep_counter = 0
+        self.threshold = 10  
+        self.alarm_active = False
+        self.beeping = False  
 
-# Scrapy stuff:
-.scrapy
+        self.update_frame()
 
-# Sphinx documentation
-docs/_build/
+    def play_alarm_sound(self):
+        if self.alarm_active and not self.beeping:
+            try:
+                winsound.Beep(1200, 500)  # Frequency 1200 Hz, Duration 0.5 seconds (adjust as needed)
+                self.beeping = True
+                self.master.after(1000, self.reset_beep_flag) # Reset beep flag after a short delay
+            except Exception as e:
+                print(f"Error playing sound: {e}")
+        if self.alarm_active:
+            self.master.after(2000, self.play_alarm_sound) # Repeat alarm every 2 seconds
 
-# PyBuilder
-.pybuilder/
-target/
+    def reset_beep_flag(self):
+        self.beeping = False
 
-# Jupyter Notebook
-.ipynb_checkpoints
+    def update_frame(self):
+        ret, frame = self.cap.read()
+        if not ret:
+            self.status_label.config(text="Failed to read frame from camera.", fg=self.alert_color)
+            return
 
-# IPython
-profile_default/
-ipython_config.py
+        gray = cv2.cvtColor(frame, cv2.COLOR_BGR2GRAY)
+        faces = self.face_cascade.detectMultiScale(gray, 1.3, 5)
 
-# pyenv
-#   For a library or package, you might want to ignore these files since the code is
-#   intended to run in multiple environments; otherwise, check them in:
-# .python-version
+        eyes_detected = False
+        for (x, y, w, h) in faces:
+            cv2.rectangle(frame, (x, y), (x + w, y + h), (0, 255, 0), 2)
+            roi_gray = gray[y:y + h, x:x + w]
+            roi_color = frame[y:y + h, x:x + w]
+            eyes = self.eye_cascade.detectMultiScale(roi_gray, scaleFactor=1.1, minNeighbors=3, minSize=(20, 20)) 
+            if len(eyes) > 0:
+                eyes_detected = True
+                for (ex, ey, ew, eh) in eyes:
+                    cv2.rectangle(roi_color, (ex, ey), (ex + ew, ey + eh), (255, 0, 0), 2)
+                break
 
-# pipenv
-#   According to pypa/pipenv#598, it is recommended to include Pipfile.lock in version control.
-#   However, in case of collaboration, if having platform-specific dependencies or dependencies
-#   having no cross-platform support, pipenv may install dependencies that don't work, or not
-#   install all needed dependencies.
-#Pipfile.lock
+        if len(faces) == 0:
+            self.status_label.config(text="❌ Face not clear, not checking for sleep.", fg=self.warning_color, font=self.status_font)
+            self.alarm_active = False # Stop alarm if face is not clear
+            self.sleep_counter = 0
+        elif eyes_detected:
+            self.sleep_counter = 0
+            self.alarm_active = False 
+            self.status_label.config(text="👀 Eyes are open.", fg=self.ok_color, font=self.status_font)
+        else:
+            self.sleep_counter += 1
+            self.status_label.config(text=f"😴 Eyes closed for {self.sleep_counter} frames.", fg=self.closed_eyes_color, font=self.status_font)
 
-# UV
-#   Similar to Pipfile.lock, it is generally recommended to include uv.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#uv.lock
+        if self.sleep_counter >= self.threshold and not self.alarm_active:
+            self.status_label.config(text="🚨 ALERT: Driver might be drowsy! 🚨", fg=self.alert_color, font=self.alert_font)
+            self.alarm_active = True
+            self.play_alarm_sound() 
+        elif self.sleep_counter < self.threshold:
+            self.alarm_active = False 
 
-# poetry
-#   Similar to Pipfile.lock, it is generally recommended to include poetry.lock in version control.
-#   This is especially recommended for binary packages to ensure reproducibility, and is more
-#   commonly ignored for libraries.
-#   https://python-poetry.org/docs/basic-usage/#commit-your-poetrylock-file-to-version-control
-#poetry.lock
+        img = Image.fromarray(cv2.cvtColor(frame, cv2.COLOR_BGR2RGB))
+        imgtk = ImageTk.PhotoImage(image=img)
+        self.video_label.imgtk = imgtk
+        self.video_label.config(image=imgtk)
+        self.video_label.after(10, self.update_frame)
 
-# pdm
-#   Similar to Pipfile.lock, it is generally recommended to include pdm.lock in version control.
-#pdm.lock
-#   pdm stores project-wide configurations in .pdm.toml, but it is recommended to not include it
-#   in version control.
-#   https://pdm.fming.dev/latest/usage/project/#working-with-version-control
-.pdm.toml
-.pdm-python
-.pdm-build/
+    def __del__(self):
+        if self.cap.isOpened():
+            self.cap.release()
 
-# PEP 582; used by e.g. github.com/David-OConnor/pyflow and github.com/pdm-project/pdm
-__pypackages__/
-
-# Celery stuff
-celerybeat-schedule
-celerybeat.pid
-
-# SageMath parsed files
-*.sage.py
-
-# Environments
-.env
-.venv
-env/
-venv/
-ENV/
-env.bak/
-venv.bak/
-
-# Spyder project settings
-.spyderproject
-.spyproject
-
-# Rope project settings
-.ropeproject
-
-# mkdocs documentation
-/site
-
-# mypy
-.mypy_cache/
-.dmypy.json
-dmypy.json
-
-# Pyre type checker
-.pyre/
-
-# pytype static type analyzer
-.pytype/
-
-# Cython debug symbols
-cython_debug/
-
-# PyCharm
-#  JetBrains specific template is maintained in a separate JetBrains.gitignore that can
-#  be found at https://github.com/github/gitignore/blob/main/Global/JetBrains.gitignore
-#  and can be added to the global gitignore or merged into this file.  For a more nuclear
-#  option (not recommended) you can uncomment the following to ignore the entire idea folder.
-#.idea/
-
-# Ruff stuff:
-.ruff_cache/
-
-# PyPI configuration file
-.pypirc
+root = tk.Tk()
+gui = DrowsinessDetectorGUI(root)
+root.mainloop()
