@@ -8,7 +8,7 @@ from PIL import Image, ImageTk
 class DrowsinessDetectorGUI:
     def __init__(self, master):
         self.master = master
-        master.title("Driver Drowsiness Detection - Engineer Muslim")  
+        master.title("Driver Drowsiness Detection - Engineer Muslim")
 
         
         self.title_font = font.Font(family="Arial", size=18, weight="bold")
